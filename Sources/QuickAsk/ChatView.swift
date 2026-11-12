@@ -67,6 +67,9 @@ struct ChatView: View {
                 .onAppear { onHeightChange(proxy.size.height) }
                 .onChange(of: proxy.size.height) { _, h in onHeightChange(h) }
         })
+        // If the window is ever briefly taller than the content, keep the content at the
+        // top (under the duck) instead of floating in the middle.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     // MARK: - Pieces

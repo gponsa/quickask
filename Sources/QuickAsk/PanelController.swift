@@ -41,6 +41,7 @@ final class KeyPanel: NSPanel {
 final class PanelController: NSObject, NSWindowDelegate {
     let model = ChatModel()
     private let panel: KeyPanel
+    private var hosting: NSHostingView<ChatView>!
     private var clickOutsideMonitor: Any?
     private static let width: CGFloat = 640
     /// The pixel duck on top of the popup (nil if its images are missing from the app).
@@ -49,7 +50,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     init(openSettings: @escaping () -> Void) {
         panel = KeyPanel(
             contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 60),
-            styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
+            styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered, defer: false)
         super.init()
 
@@ -76,16 +77,14 @@ final class PanelController: NSObject, NSWindowDelegate {
             model: model,
             onHeightChange: { [weak self] height in self?.resize(toHeight: height) },
             openSettings: openSettings)
-        let hosting = NSHostingView(rootView: root)
+        hosting = NSHostingView(rootView: root)
         hosting.sizingOptions = []                    // we size the window ourselves (top edge fixed)
-        hosting.translatesAutoresizingMaskIntoConstraints = false
+        // Plain "stretch with the parent" resizing rather than Auto Layout constraints:
+        // with constraints, the background sometimes kept an old size after the window
+        // was resized, so the visible bar and the window (where the duck stands) disagreed.
+        hosting.autoresizingMask = [.width, .height]
+        hosting.frame = background.bounds
         background.addSubview(hosting)
-        NSLayoutConstraint.activate([
-            hosting.leadingAnchor.constraint(equalTo: background.leadingAnchor),
-            hosting.trailingAnchor.constraint(equalTo: background.trailingAnchor),
-            hosting.topAnchor.constraint(equalTo: background.topAnchor),
-            hosting.bottomAnchor.constraint(equalTo: background.bottomAnchor),
-        ])
         panel.contentView = background
 
         model.close = { [weak self] in self?.hide() }
@@ -139,16 +138,27 @@ final class PanelController: NSObject, NSWindowDelegate {
         // A screenshot captures this same screen.
         model.targetDisplayID = screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
         if let visible = screen?.visibleFrame {
-            let height = panel.frame.height
+            // Measure the content now. The window's current height can be left over from
+            // a longer conversation: macOS doesn't redraw hidden windows, so the shrink
+            // after closing may not have happened yet.
+            let height = contentHeight()
             let top = visible.maxY - visible.height * 0.18
             panel.setFrame(NSRect(x: visible.midX - Self.width / 2, y: top - height,
                                   width: Self.width, height: height), display: false)
+            fitContentToWindow()
         }
 
         panel.makeKeyAndOrderFront(nil)
         focusInput()
         // The duck starts its entrance once the popup is already on screen.
         if UserDefaults.standard.bool(forKey: Prefs.showDuck) { duck?.show(above: panel.frame) }
+        // Check once more after SwiftUI's first on-screen layout pass, then refresh the
+        // shadow so it matches the real shape.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.panel.isVisible else { return }
+            self.resize(toHeight: self.contentHeight())
+            self.panel.invalidateShadow()
+        }
         // The screenshot is taken after the popup appears (so opening stays instant);
         // the popup itself is left out of the picture.
         if withScreenshot { model.toggleScreenshot() }
@@ -183,11 +193,32 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// (macOS window coordinates start at the bottom-left, hence the arithmetic).
     private func resize(toHeight height: CGFloat) {
         var frame = panel.frame
-        guard abs(frame.height - height) > 0.5 else { return }
+        guard height > 1, abs(frame.height - height) > 0.5 else { return }
         frame.origin.y += frame.height - height
         frame.size.height = height
         panel.setFrame(frame, display: true)
+        fitContentToWindow()
+        duck?.place(above: panel.frame)               // the duck always stands on the real top edge
+        // Recompute the shadow once the new size has been drawn (doing it immediately can
+        // capture the old shape, which leaves a ghost outline).
         panel.invalidateShadow()
+        DispatchQueue.main.async { [weak self] in self?.panel.invalidateShadow() }
+    }
+
+    /// Makes the background (and the content on it) exactly fill the window. Normally
+    /// automatic; done by hand too, because a mismatch is what left the duck floating.
+    private func fitContentToWindow() {
+        guard let content = panel.contentView else { return }
+        let bounds = NSRect(origin: .zero, size: panel.frame.size)
+        if content.frame != bounds { content.frame = bounds }
+        if hosting.frame != content.bounds { hosting.frame = content.bounds }
+    }
+
+    /// The height the content actually needs right now (forces SwiftUI to lay out first).
+    private func contentHeight() -> CGFloat {
+        hosting.layoutSubtreeIfNeeded()
+        let height = ceil(hosting.fittingSize.height)
+        return height > 1 ? height : panel.frame.height
     }
 
     // Also close if the panel loses focus some other way (e.g. ⌘Tab).
@@ -208,3 +239,4 @@ final class PanelController: NSObject, NSWindowDelegate {
         return image
     }
 }
+
