@@ -8,10 +8,19 @@ struct ChatMessage {
     var imageJPEG: Data? = nil   // only ever set on the first user message
 }
 
-/// What the stream hands back: answer text, or a status note for the UI only.
+/// A web page Claude looked at or cited.
+struct Source: Equatable {
+    let title: String
+    let url: URL
+}
+
+/// What the stream hands back: answer text, or things for the UI only.
 enum StreamEvent {
     case text(String)
     case notice(String)
+    case searching(String?)   // Claude started a web search (with the query, once known)
+    case result(Source)       // a page the search returned
+    case cited(Source)        // a page the answer cites
 }
 
 /// Friendly, user-facing errors.
@@ -47,7 +56,7 @@ final class AnthropicClient: @unchecked Sendable {
     // is written to disk.
     private let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 30      // max silence between bytes
+        config.timeoutIntervalForRequest = 60      // max silence between bytes (web searches take a few s)
         config.httpMaximumConnectionsPerHost = 2
         return URLSession(configuration: config, delegate: NoRedirects(), delegateQueue: nil)
     }()
@@ -93,7 +102,7 @@ final class AnthropicClient: @unchecked Sendable {
 
     /// Streams the answer as text chunks (plus UI-only notices). The stream finishes
     /// normally at the end of the answer, or throws an `AskError`.
-    func stream(messages: [ChatMessage], system: String, model: String, apiKey: String)
+    func stream(messages: [ChatMessage], system: String, model: String, apiKey: String, webSearch: Bool)
         -> AsyncThrowingStream<StreamEvent, Error>
     {
         AsyncThrowingStream { continuation in
@@ -104,7 +113,7 @@ final class AnthropicClient: @unchecked Sendable {
                     addHeaders(to: &request, apiKey: apiKey)
                     request.setValue("application/json", forHTTPHeaderField: "content-type")
                     request.httpBody = try JSONSerialization.data(
-                        withJSONObject: Self.body(messages: messages, system: system, model: model))
+                        withJSONObject: Self.body(messages: messages, system: system, model: model, webSearch: webSearch))
 
                     let (bytes, response) = try await session.bytes(for: request)
                     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -116,6 +125,11 @@ final class AnthropicClient: @unchecked Sendable {
                         throw Self.error(status: status, body: data, model: model)
                     }
 
+                    // The answer arrives as numbered "content blocks": text, and (with web
+                    // search) a search call whose query streams in as JSON, then its results.
+                    var blockTypes: [Int: String] = [:]
+                    var searchInput: [Int: String] = [:]
+
                     // SSE: lines like `event: …` and `data: {json}`. We only need the data lines.
                     for try await line in bytes.lines {
                         guard line.hasPrefix("data:") else { continue }
@@ -123,19 +137,43 @@ final class AnthropicClient: @unchecked Sendable {
                         // A malformed event is skipped, never a crash.
                         guard let obj = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
                               let type = obj["type"] as? String else { continue }
+                        let index = obj["index"] as? Int ?? -1
 
                         switch type {
+                        case "content_block_start":
+                            guard let block = obj["content_block"] as? [String: Any],
+                                  let blockType = block["type"] as? String else { break }
+                            blockTypes[index] = blockType
+                            if blockType == "server_tool_use" {
+                                continuation.yield(.searching(nil))
+                            } else if blockType == "web_search_tool_result",
+                                      let results = block["content"] as? [[String: Any]] {   // an error is an object, not a list
+                                for r in results { if let s = Self.source(r) { continuation.yield(.result(s)) } }
+                            }
                         case "content_block_delta":
-                            // Only visible text. Thinking blocks (if any) are ignored.
-                            if let delta = obj["delta"] as? [String: Any],
-                               delta["type"] as? String == "text_delta",
-                               let text = delta["text"] as? String {
-                                continuation.yield(.text(text))
+                            guard let delta = obj["delta"] as? [String: Any] else { break }
+                            switch delta["type"] as? String {
+                            case "text_delta":     // visible answer text (thinking blocks are ignored)
+                                if let text = delta["text"] as? String { continuation.yield(.text(text)) }
+                            case "input_json_delta":   // the search query, arriving in pieces
+                                searchInput[index, default: ""] += delta["partial_json"] as? String ?? ""
+                            case "citations_delta":
+                                if let c = delta["citation"] as? [String: Any], let s = Self.source(c) {
+                                    continuation.yield(.cited(s))
+                                }
+                            default: break
+                            }
+                        case "content_block_stop":
+                            if blockTypes[index] == "server_tool_use",
+                               let input = searchInput[index],
+                               let parsed = try? JSONSerialization.jsonObject(with: Data(input.utf8)) as? [String: Any] {
+                                continuation.yield(.searching(parsed["query"] as? String))
                             }
                         case "message_delta":
                             let stop = (obj["delta"] as? [String: Any])?["stop_reason"] as? String
                             if stop == "max_tokens" { continuation.yield(.notice("Answer cut off (length limit).")) }
                             if stop == "refusal" { continuation.yield(.notice("Claude declined to answer this.")) }
+                            if stop == "pause_turn" { continuation.yield(.notice("The web search took too long. Try asking again.")) }
                         case "error":
                             let err = obj["error"] as? [String: Any]
                             if err?["type"] as? String == "overloaded_error" { throw AskError.overloaded }
@@ -171,14 +209,24 @@ final class AnthropicClient: @unchecked Sendable {
         request.setValue(apiVersion, forHTTPHeaderField: "anthropic-version")
     }
 
-    static func body(messages: [ChatMessage], system: String, model: String) -> [String: Any] {
+    static func body(messages: [ChatMessage], system: String, model: String, webSearch: Bool) -> [String: Any] {
         let encoded: [[String: Any]] = messages.map { encode($0) }
         var body: [String: Any] = [:]
         body["model"] = model
         body["max_tokens"] = 2048
         body["stream"] = true
-        if !system.isEmpty { body["system"] = system }   // an empty system prompt is just left out
+        body["system"] = fullSystemPrompt(system, webSearch: webSearch)
         body["messages"] = encoded
+
+        if webSearch {
+            // Anthropic's own web search tool: the search runs on Anthropic's servers, so
+            // QuickAsk still only talks to api.anthropic.com. Claude decides per question
+            // whether to search; at most 3 searches per question (≈ $0.01 each).
+            var tool: [String: Any] = ["type": "web_search_20250305", "name": "web_search", "max_uses": 3]
+            // Your time zone (no city or address) helps with "today" and local news.
+            tool["user_location"] = ["type": "approximate", "timezone": TimeZone.current.identifier] as [String: String]
+            body["tools"] = [tool]
+        }
 
         // Speed: newer models "think" before answering by default, which delays the
         // first word. For quick lookups we turn that off / down. Each model family
@@ -194,6 +242,33 @@ final class AnthropicClient: @unchecked Sendable {
             body["output_config"] = lowEffort
         }
         return body
+    }
+
+    /// Your system prompt from Settings, plus today's date (so "today" and "latest" mean
+    /// something) and, with web search on, when to search.
+    private static func fullSystemPrompt(_ userPrompt: String, webSearch: Bool) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "EEEE d MMMM yyyy, HH:mm"
+        var parts = [userPrompt]
+        parts.append("The current date and time is \(formatter.string(from: Date())) (\(TimeZone.current.identifier)).")
+        if webSearch {
+            parts.append("""
+            You can search the web. Search only when the question needs current or recent information \
+            (news, prices, scores, weather, schedules, anything that may have changed since your training); \
+            otherwise answer from your own knowledge without searching. Don't announce that you're searching; \
+            just give the answer, and keep it as short as usual.
+            """)
+        }
+        return parts.filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+
+    /// A web page from a search result or citation (only http(s) links are kept).
+    private static func source(_ dict: [String: Any]) -> Source? {
+        guard let urlString = dict["url"] as? String, let url = URL(string: urlString),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return nil }
+        let title = (dict["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? url.host ?? urlString
+        return Source(title: title, url: url)
     }
 
     private static func encode(_ m: ChatMessage) -> [String: Any] {

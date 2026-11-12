@@ -103,6 +103,29 @@ struct ChatView: View {
         }
     }
 
+    /// Small "globe + site name" links under an answer that used the web. They open in
+    /// your browser (only https links open, see the openURL rule below).
+    private func sourceLinks(_ sources: [Source]) -> some View {
+        HStack(spacing: 6) {
+            ForEach(sources, id: \.url) { source in
+                Link(destination: source.url) {
+                    Label(Self.siteName(source.url), systemImage: "globe")
+                        .lineLimit(1)
+                }
+                .help(source.title)
+                .font(.caption)
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(.quaternary, in: Capsule())
+            }
+        }
+    }
+
+    /// "www.theguardian.com" → "theguardian.com"
+    static func siteName(_ url: URL) -> String {
+        let host = url.host ?? url.absoluteString
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+
     private func chip(icon: String, label: String, remove: @escaping () -> Void) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
@@ -125,11 +148,21 @@ struct ChatView: View {
                             if model.turns.count > 1 || turn.answer.isEmpty {
                                 Text(turn.question).font(.callout).foregroundStyle(.secondary).lineLimit(3)
                             }
+                            if let status = turn.searchStatus {
+                                HStack(spacing: 6) {
+                                    ProgressView().controlSize(.mini)
+                                    Text(status).lineLimit(1).truncationMode(.tail)
+                                }
+                                .font(.callout).foregroundStyle(.secondary)
+                            }
                             // Whatever arrived before an error stays visible above it.
                             if !turn.answer.isEmpty {
                                 Text(Self.markdown(turn.answer))
                                     .textSelection(.enabled)
                                     .fixedSize(horizontal: false, vertical: true)
+                                if !turn.sourcesToShow.isEmpty {
+                                    sourceLinks(turn.sourcesToShow)
+                                }
                             }
                             if let notice = turn.notice {
                                 Text(notice).font(.caption).italic().foregroundStyle(.secondary)

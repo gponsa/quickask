@@ -11,6 +11,12 @@ final class ChatModel: ObservableObject {
         var answer: String
         var error: String?
         var notice: String?   // e.g. "answer cut off": shown in the UI, never sent to Claude
+        var searchStatus: String?        // "Searching the web for …", while a search runs
+        var sources: [Source] = []       // pages the answer cites
+        var results: [Source] = []       // pages the search found (shown if nothing is cited)
+
+        /// Links to show under the answer: cited pages, or else the top search results.
+        var sourcesToShow: [Source] { Array((sources.isEmpty ? results : sources).prefix(4)) }
     }
 
     @Published var input = ""
@@ -66,6 +72,7 @@ final class ChatModel: ObservableObject {
         let typedModel = (defaults.string(forKey: Prefs.model) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let model = typedModel.isEmpty ? Prefs.defaultModel : typedModel
         let system = (defaults.string(forKey: Prefs.systemPrompt) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let webSearch = defaults.bool(forKey: Prefs.webSearch)
         let messages = history
         let turnID = turns[turns.count - 1].id
 
@@ -76,15 +83,26 @@ final class ChatModel: ObservableObject {
             var failure: String?
             do {
                 for try await event in AnthropicClient.shared.stream(
-                    messages: messages, system: system, model: model, apiKey: apiKey) {
+                    messages: messages, system: system, model: model, apiKey: apiKey, webSearch: webSearch) {
                     // Look the turn up by id each time: ⌘N may have cleared the list meanwhile.
-                    let i = turns.firstIndex(where: { $0.id == turnID })
+                    guard let i = turns.firstIndex(where: { $0.id == turnID }) else { continue }
                     switch event {
                     case .text(let chunk):
                         answer += chunk
-                        if let i { turns[i].answer = answer }
+                        turns[i].answer = answer
+                        turns[i].searchStatus = nil
                     case .notice(let note):
-                        if let i { turns[i].notice = note }
+                        turns[i].notice = note
+                    case .searching(let query):
+                        // Anything written before a search is a preamble ("Let me look that
+                        // up…"); the real answer comes after the results, so start fresh.
+                        answer = ""
+                        turns[i].answer = ""
+                        turns[i].searchStatus = query.map { "Searching the web for “\($0)”…" } ?? "Searching the web…"
+                    case .result(let source):
+                        if !turns[i].results.contains(where: { $0.url == source.url }) { turns[i].results.append(source) }
+                    case .cited(let source):
+                        if !turns[i].sources.contains(where: { $0.url == source.url }) { turns[i].sources.append(source) }
                     }
                 }
             } catch {

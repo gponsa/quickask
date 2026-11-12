@@ -26,6 +26,13 @@ Requirements: Command Line Tools for Xcode 26.x (no full Xcode needed), and the 
 | ⌘C (nothing selected) | copy the last answer |
 | ⌘, | settings |
 
+## Live answers from the web
+With **Settings → Search the web when needed** on (the default), Claude searches the web by itself when a question needs current information: news, prices, scores, weather, anything recent. Ordinary questions are answered straight away without searching. While it searches you'll see "Searching the web for …", and the answer comes with small links to its sources.
+
+- The search runs on Anthropic's servers, so QuickAsk still only talks to api.anthropic.com.
+- Cost: about $0.01 per search plus the results' tokens (roughly 1 cent per searched question with Haiku). At most 3 searches per question.
+- If searches fail with "web search is not enabled", an admin turned it off at platform.claude.com/settings/capabilities.
+
 ## Changing the hotkey
 Menu-bar icon → Settings… → Hotkeys. Click the shortcut and press a new one (it must include ⌃, ⌥ or ⌘). If another app already uses it, you'll see a warning and the old one stays.
 

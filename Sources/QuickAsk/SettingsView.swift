@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.captureSelection) private var captureSelection = false
     @AppStorage(Prefs.keepConversation) private var keepConversation = false
     @AppStorage(Prefs.showDuck) private var showDuck = true
+    @AppStorage(Prefs.webSearch) private var webSearch = true
 
     @State private var apiKey = ""
     @State private var keySaved = Keychain.apiKey() != nil
@@ -98,6 +99,9 @@ struct SettingsView: View {
                     }
                 }
                 Toggle("Keep conversation when reopening", isOn: $keepConversation)
+                Toggle("Search the web when needed", isOn: $webSearch)
+                Text("For news, prices and anything recent. About $0.01 per search, max 3 per question. Claude only searches when the question needs it.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Toggle("Show the duck 🐤", isOn: $showDuck)
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in setLaunchAtLogin(on) }
