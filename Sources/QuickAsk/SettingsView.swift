@@ -6,6 +6,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.systemPrompt) private var systemPrompt = Prefs.defaultSystemPrompt
     @AppStorage(Prefs.captureSelection) private var captureSelection = false
     @AppStorage(Prefs.keepConversation) private var keepConversation = false
+    @AppStorage(Prefs.showDuck) private var showDuck = true
 
     @State private var apiKey = ""
     @State private var keySaved = Keychain.apiKey() != nil
@@ -97,6 +98,7 @@ struct SettingsView: View {
                     }
                 }
                 Toggle("Keep conversation when reopening", isOn: $keepConversation)
+                Toggle("Show the duck 🐤", isOn: $showDuck)
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in setLaunchAtLogin(on) }
                 if let loginError {

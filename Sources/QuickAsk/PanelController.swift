@@ -43,6 +43,8 @@ final class PanelController: NSObject, NSWindowDelegate {
     private let panel: KeyPanel
     private var clickOutsideMonitor: Any?
     private static let width: CGFloat = 640
+    /// The pixel duck on top of the popup (nil if its images are missing from the app).
+    private lazy var duck: DuckWindow? = DuckSprites.isAvailable ? DuckWindow(width: Self.width, observing: model) : nil
 
     init(openSettings: @escaping () -> Void) {
         panel = KeyPanel(
@@ -145,6 +147,8 @@ final class PanelController: NSObject, NSWindowDelegate {
 
         panel.makeKeyAndOrderFront(nil)
         focusInput()
+        // The duck starts its entrance once the popup is already on screen.
+        if UserDefaults.standard.bool(forKey: Prefs.showDuck) { duck?.show(above: panel.frame) }
         // The screenshot is taken after the popup appears (so opening stays instant);
         // the popup itself is left out of the picture.
         if withScreenshot { model.toggleScreenshot() }
@@ -160,6 +164,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         guard panel.isVisible else { return }
         model.cancel()
         panel.orderOut(nil)
+        duck?.hide()
         if let monitor = clickOutsideMonitor { NSEvent.removeMonitor(monitor) }
         clickOutsideMonitor = nil
         // Forget the conversation now (not on next open), so questions, selected text and
@@ -187,6 +192,9 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     // Also close if the panel loses focus some other way (e.g. ⌘Tab).
     func windowDidResignKey(_ notification: Notification) { hide() }
+
+    // If you drag the popup, the duck comes along.
+    func windowDidMove(_ notification: Notification) { duck?.place(above: panel.frame) }
 
     private static func roundedMask(radius: CGFloat) -> NSImage {
         let edge = radius * 2 + 1

@@ -8,6 +8,7 @@ enum Prefs {
     static let systemPrompt = "systemPrompt"
     static let captureSelection = "captureSelection"
     static let keepConversation = "keepConversation"
+    static let showDuck = "showDuck"
 
     static let defaultModel = "claude-haiku-5-5"
     static let defaultSystemPrompt = """
@@ -22,6 +23,7 @@ enum Prefs {
             systemPrompt: defaultSystemPrompt,
             captureSelection: false,
             keepConversation: false,
+            showDuck: true,
         ])
     }
 }

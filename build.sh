@@ -23,6 +23,7 @@ build() {
   rm -rf "$APP"
   mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
   cp Resources/Info.plist "$APP/Contents/"
+  cp -R Resources/Duck "$APP/Contents/Resources/"   # the duck's animation frames
 
   # We call the Swift compiler directly instead of `swift build` (SwiftPM): there are
   # no packages to fetch, and it works with older Command Line Tools too.
