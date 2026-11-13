@@ -4,11 +4,26 @@
 
 A tiny Mac menu-bar app for quick answers from Claude. Press **⌃M** (Control+M) in any app, type a question, and the answer streams in a small popup. Press Esc and you're back where you were.
 
+<p align="center"><img src="docs/ask.gif" width="700" alt="Pressing Control+M over a web page, typing 'what is hello world?' and getting a short answer"></p>
+
 - **Ask about what you're looking at:** attach a screenshot of your screen, or the text you've selected.
 - **Live answers:** Claude searches the web by itself when a question needs current information (news, prices, scores).
 - **Follow-up questions**, one-key copy of the answer, and an editable system prompt.
 - **A pixel duck** that sits on top of the popup.
 - **No servers, accounts or tracking.** The app talks only to Anthropic's API, using your own API key.
+
+## See it in action
+**Follow-ups and live web search.** Ask a follow-up and Claude looks it up online, with links to its sources.
+
+<p align="center"><img src="docs/web-search.gif" width="700" alt="A follow-up question 'search online for cool uses of hello world' triggers a web search, then an answer with source links"></p>
+
+**Ask about your screen.** Press the camera button (or ⌃⇧M) to attach a screenshot, then ask about it.
+
+<p align="center"><img src="docs/screenshot.gif" width="700" alt="A screenshot is attached to the popup and Claude summarises the Wikipedia page that was on screen"></p>
+
+**And the duck.** It arrives a different way each time (running, jumping or falling in) and keeps itself busy while you type. You can turn it off in Settings.
+
+<p align="center"><img src="docs/duck.gif" width="700" alt="A pixel duck drops onto the popup and wanders along its top edge"></p>
 
 ## What you need
 - A Mac with **macOS 14 (Sonoma) or newer**. Built and tested on Apple Silicon; Intel Macs should work but haven't been tested.
