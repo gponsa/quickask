@@ -9,7 +9,7 @@ A tiny Mac menu-bar app for quick answers from Claude. Press **⌃M** (Control+M
 - **Ask about what you're looking at:** attach a screenshot of your screen, or the text you've selected.
 - **Live answers:** Claude searches the web by itself when a question needs current information (news, prices, scores).
 - **Follow-up questions**, one-key copy of the answer, and an editable system prompt.
-- **A pixel duck** that sits on top of the popup.
+- **A pixel duck** that sits on top of the popup, and quacks when an answer is ready, even if you've closed the popup and moved on.
 - **No servers, accounts or tracking.** The app talks only to Anthropic's API, using your own API key.
 
 ## See it in action
@@ -21,7 +21,7 @@ A tiny Mac menu-bar app for quick answers from Claude. Press **⌃M** (Control+M
 
 <p align="center"><img src="docs/screenshot.gif" width="700" alt="A screenshot is attached to the popup and Claude summarises the Wikipedia page that was on screen"></p>
 
-**And the duck.** It arrives a different way each time (running, jumping or falling in) and keeps itself busy while you type. You can turn it off in Settings.
+**And the duck.** It arrives a different way each time (running, jumping or falling in) and keeps itself busy while you type. When an answer is ready, it hops and quacks. If you close the popup while Claude is still writing, the answer keeps coming and the quack tells you it's ready. You can turn off the duck and the quack in Settings.
 
 <p align="center"><img src="docs/duck.gif" width="700" alt="A pixel duck drops onto the popup and wanders along its top edge"></p>
 
@@ -62,8 +62,8 @@ The first time, the build also creates a small certificate called "QuickAsk Loca
 | ⌃⇧M or camera button | attach a screenshot of your screen (the popup is left out) |
 | Enter | send |
 | Shift+Enter | new line |
-| Esc / click outside | close |
-| ⌘N | new conversation |
+| Esc / click outside | close (an answer still being written keeps coming; the duck quacks when it's ready) |
+| ⌘N | new conversation (stops an answer that's still being written) |
 | ⌘C (nothing selected) | copy the last answer |
 | ⌘, | settings |
 
@@ -74,7 +74,7 @@ Open them from the menu-bar icon → **Settings…**, or by opening QuickAsk fro
 - **Hotkeys.** Click a shortcut and press a new one (it must include ⌃, ⌥ or ⌘). If another app already uses it, you'll see a warning and the old one stays. While QuickAsk runs, ⌃M is reserved for it everywhere. In Terminal, ⌃M normally acts as Return, so change the hotkey if that bothers you.
 - **Include selected text** sends whatever text you've selected along with your question. Needs Accessibility permission (see below).
 - **Search the web when needed** (on by default). About $0.01 per search, at most 3 per question. Claude only searches when the question needs it. While it searches you'll see "Searching the web for …", and the answer comes with links to its sources.
-- **Keep conversation when reopening**, **Show the duck**, **Launch at login**, and the **system prompt** that sets Claude's tone and answer length.
+- **Keep conversation when reopening**, **Show the duck**, **Quack when an answer is ready**, **Launch at login**, and the **system prompt** that sets Claude's tone and answer length.
 
 ## Permissions
 - **Hotkey:** none needed.
@@ -124,7 +124,7 @@ Plain Swift (SwiftUI + AppKit) with no dependencies, compiled by `build.sh` with
 | `Duck.swift` | the duck |
 | `SettingsView.swift` | the Settings window |
 
-The duck's frames were cut from `Art/duck-mockup.png` with `Art/tools/extract_duck.py`.
+The duck's frames were cut from `Art/duck-mockup.png` with `Art/tools/extract_duck.py`. Its quack is `Resources/quack.wav`.
 
 ## License
 MIT. See [LICENSE](LICENSE). Not affiliated with Anthropic.

@@ -10,6 +10,7 @@ enum Prefs {
     static let keepConversation = "keepConversation"
     static let showDuck = "showDuck"
     static let webSearch = "webSearch"
+    static let quackWhenReady = "quackWhenReady"
 
     static let defaultModel = "claude-haiku-5-5"
     static let defaultSystemPrompt = """
@@ -26,6 +27,7 @@ enum Prefs {
             keepConversation: false,
             showDuck: true,
             webSearch: true,
+            quackWhenReady: true,
         ])
     }
 }

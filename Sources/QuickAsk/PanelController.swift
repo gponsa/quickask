@@ -88,6 +88,12 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.contentView = background
 
         model.close = { [weak self] in self?.hide() }
+        // The duck quacks when an answer is ready (and hops, if the popup is open). Handy
+        // if you closed the popup while Claude was still writing: ⌃M shows the answer.
+        model.onAnswerFinished = {
+            guard UserDefaults.standard.bool(forKey: Prefs.quackWhenReady) else { return }
+            DuckSound.quack()
+        }
         panel.onEscape = { [weak self] in self?.hide() }
         panel.onCommandKey = { [weak self] key in
             guard let self else { return false }
@@ -172,14 +178,15 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     func hide() {
         guard panel.isVisible else { return }
-        model.cancel()
         panel.orderOut(nil)
         duck?.hide()
         if let monitor = clickOutsideMonitor { NSEvent.removeMonitor(monitor) }
         clickOutsideMonitor = nil
         // Forget the conversation now (not on next open), so questions, selected text and
         // screenshots don't linger in memory, and the popup reopens at its small size.
-        if !UserDefaults.standard.bool(forKey: Prefs.keepConversation) { model.reset() }
+        // Exception: an answer still being written keeps going in the background, so it's
+        // there when you reopen; the conversation is forgotten the next time you close.
+        if !model.isStreaming, !UserDefaults.standard.bool(forKey: Prefs.keepConversation) { model.reset() }
     }
 
     /// Puts the cursor in the input field. Also retried on the next run-loop turn: on the

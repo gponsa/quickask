@@ -38,6 +38,8 @@ final class ChatModel: ObservableObject {
     var isInputFocused: (() -> Bool)?
     /// Set by the panel so the input view can close the popup (Escape).
     var close: (() -> Void)?
+    /// Set by the panel: an answer has finished (or failed). Not called when cancelled.
+    var onAnswerFinished: (() -> Void)?
 
     /// What was actually sent for each turn (with context), so follow-ups keep it.
     private var history: [ChatMessage] = []
@@ -119,10 +121,12 @@ final class ChatModel: ObservableObject {
                 history.removeLast()
             }
             isStreaming = false
+            onAnswerFinished?()
         }
     }
 
-    /// Stops an answer that's still streaming (Escape, ⌘N, closing the popup).
+    /// Stops an answer that's still streaming (⌘N). Closing the popup does NOT stop it:
+    /// the answer keeps arriving in the background, and the duck quacks when it's ready.
     func cancel() {
         guard isStreaming else { return }
         generation += 1

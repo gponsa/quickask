@@ -58,6 +58,7 @@ build() {
   mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
   cp Resources/Info.plist "$APP/Contents/"
   cp -R Resources/Duck "$APP/Contents/Resources/"   # the duck's animation frames
+  cp Resources/quack.wav "$APP/Contents/Resources/" # played when a background answer is ready
 
   # We call the Swift compiler directly instead of `swift build` (SwiftPM): there are
   # no packages to fetch. It builds for this Mac's chip (Apple Silicon or Intel).
