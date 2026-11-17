@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.keepConversation) private var keepConversation = false
     @AppStorage(Prefs.showDuck) private var showDuck = true
     @AppStorage(Prefs.webSearch) private var webSearch = true
+    @AppStorage(Prefs.quackWhenReady) private var quackWhenReady = true
 
     @State private var apiKey = ""
     @State private var keySaved = Keychain.apiKey() != nil
@@ -103,6 +104,9 @@ struct SettingsView: View {
                 Text("For news, prices and anything recent. About $0.01 per search, max 3 per question. Claude only searches when the question needs it.")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("Show the duck 🐤", isOn: $showDuck)
+                Toggle("Quack when an answer is ready", isOn: $quackWhenReady)
+                Text("Also when the popup is closed: if you close it while Claude is still writing, the answer keeps coming. Press ⌃M to see it.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in setLaunchAtLogin(on) }
                 if let loginError {

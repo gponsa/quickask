@@ -223,6 +223,7 @@ final class DuckWindow {
     let controller = DuckController()
     private let window: NSPanel
     private var busySubscription: AnyCancellable?
+    private weak var model: ChatModel?
 
     /// How much room above the bar the duck has (for jumps and dropping in).
     static let stageHeight: CGFloat = DuckSprites.cellSize.height + 110
@@ -242,6 +243,7 @@ final class DuckWindow {
         hosting.sizingOptions = []
         window.contentView = hosting
 
+        self.model = model
         busySubscription = model.$isStreaming
             .removeDuplicates()
             .sink { [weak self] streaming in self?.controller.setBusy(streaming) }
@@ -252,6 +254,8 @@ final class DuckWindow {
         place(above: barFrame)
         window.orderFront(nil)
         controller.start(stageWidth: barFrame.width, dropHeight: Self.stageHeight)
+        // Reopened while an answer is still arriving in the background: keep running.
+        if model?.isStreaming == true { controller.setBusy(true) }
     }
 
     func place(above barFrame: NSRect) {
@@ -263,5 +267,18 @@ final class DuckWindow {
     func hide() {
         controller.stop()
         window.orderOut(nil)
+    }
+}
+
+/// The duck's quack (Resources/quack.wav), played when an answer is ready.
+@MainActor
+enum DuckSound {
+    private static let sound: NSSound? = Bundle.main.url(forResource: "quack", withExtension: "wav")
+        .flatMap { NSSound(contentsOf: $0, byReference: true) }
+
+    static func quack() {
+        guard let sound else { return }
+        sound.stop()                                   // restart if it's somehow still playing
+        sound.play()
     }
 }
